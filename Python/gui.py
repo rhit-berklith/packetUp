@@ -8,6 +8,7 @@ import datetime
 from reader import capture_packets_on_interface, packets_data_list, packets_lock
 from map import MapFrame
 from geolocation import IPGeolocation  # or from geolocation_api import IPGeolocationAPI
+from geo_blocker import add_country, remove_country, get_blocked_countries
 
 class PacketCaptureGUI:
     def __init__(self, root):
@@ -25,6 +26,7 @@ class PacketCaptureGUI:
         self.interfaces = []
         self.setup_interface_selection()
         self.setup_controls()
+        self.setup_geo_blocking_ui()
         self.setup_frames()
         self.setup_packet_list()
         self.status_var = tk.StringVar(value="Ready")
@@ -279,6 +281,43 @@ class PacketCaptureGUI:
     def on_packet_select(self, event):
         pass
 
+
+    def setup_geo_blocking_ui(self):
+        frame = ttk.LabelFrame(self.root, text="GeoBlocking (Block by Country Code)")
+        frame.pack(fill=tk.X, padx=10, pady=5)
+
+        self.geo_entry = ttk.Entry(frame)
+        self.geo_entry.pack(side=tk.LEFT, padx=5)
+
+        add_button = ttk.Button(frame, text="Block Country", command=self.add_country_ui)
+        add_button.pack(side=tk.LEFT, padx=5)
+
+        remove_button = ttk.Button(frame, text="Unblock Selected", command=self.remove_country_ui)
+        remove_button.pack(side=    tk.LEFT, padx=5)
+
+        self.blocked_listbox = tk.Listbox(frame, height=4)
+        self.blocked_listbox.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        self.refresh_blocked_list()
+
+    def add_country_ui(self):
+        code = self.geo_entry.get().strip().upper()
+        if code:
+            add_country(code)
+            self.refresh_blocked_list()
+
+    def remove_country_ui(self):
+        selected = self.blocked_listbox.curselection()
+        if selected:
+            code = self.blocked_listbox.get(selected[0])
+            remove_country(code)
+            self.refresh_blocked_list()
+
+    def refresh_blocked_list(self):
+        self.blocked_listbox.delete(0, tk.END)
+        for code in get_blocked_countries():
+            self.blocked_listbox.insert(tk.END, code)
+
+
     def on_closing(self):
         """Handle application shutdown."""
         try:
@@ -302,6 +341,8 @@ class PacketCaptureGUI:
             print(f"Error during shutdown: {e}")
             # Force destroy even if there was an error
             self.root.destroy()
+
+
 
 def start_gui():
     root = tk.Tk()
