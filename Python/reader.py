@@ -1,6 +1,7 @@
 import threading
 import time
 from scapy.all import sniff, get_if_list
+from geo_blocker import is_blocked
 # Depending on your Scapy installation and OS, you might need to configure Npcap/WinPcap.
 # from scapy.config import conf
 # Example: conf.use_pcap = True or conf.use_npcap = True if issues arise.
@@ -18,6 +19,8 @@ def packet_callback(packet):
     This function is called by Scapy for each captured packet.
     It extracts length and raw data, then appends to the global list.
     """
+    
+
     with packets_lock:
         packet_info = {
             'length': len(packet),      # Length of the packet
