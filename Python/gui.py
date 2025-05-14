@@ -4,11 +4,11 @@ import threading
 import time
 from scapy.all import get_if_list, conf
 import datetime
-from tkintermapview import TkinterMapView
 
 from reader import capture_packets_on_interface, packets_data_list, packets_lock
+from map import MapFrame
+from geolocation import IPGeolocation  # or from geolocation_api import IPGeolocationAPI
 from geo_blocker import add_country, remove_country, get_blocked_countries
-
 
 class PacketCaptureGUI:
     def __init__(self, root):
@@ -29,11 +29,27 @@ class PacketCaptureGUI:
         self.setup_geo_blocking_ui()
         self.setup_frames()
         self.setup_packet_list()
-        self.setup_map()
         self.status_var = tk.StringVar(value="Ready")
         self.setup_status_bar()
         self.packet_tree.bind("<<TreeviewSelect>>", self.on_packet_select)
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+        # Initialize geolocation service
+        try:
+            self.geolocator = IPGeolocation()  # or IPGeolocationAPI()
+            # Test geolocation with Google's DNS
+            test_coords = self.geolocator.geocode_ip("8.8.8.8")
+            print(f"[GEOLOCATION TEST] Google DNS (8.8.8.8) coords: {test_coords}")
+        except Exception as e:
+            # Handle initialization error
+            messagebox.showwarning("Geolocation Service", f"Could not initialize geolocation: {e}")
+            self.geolocator = None
+
+    def geocode_ip(self, ip_address):
+        """Convert an IP address to geographical coordinates."""
+        if not self.geolocator:
+            return None
+        return self.geolocator.geocode_ip(ip_address)
 
     def setup_interface_selection(self):
         frame = ttk.LabelFrame(self.root, text="Network Interface")
@@ -77,8 +93,9 @@ class PacketCaptureGUI:
         self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         self.list_frame = ttk.Frame(self.main_frame)
         self.main_frame.add(self.list_frame, weight=2)
-        self.map_frame = ttk.LabelFrame(self.main_frame, text="Earth Map")
-        self.main_frame.add(self.map_frame, weight=1)
+        
+        self.map_display_frame = MapFrame(self.main_frame)
+        self.main_frame.add(self.map_display_frame, weight=1)
 
     def setup_packet_list(self):
         list_label_frame = ttk.LabelFrame(self.list_frame, text="Captured Packets")
@@ -97,14 +114,6 @@ class PacketCaptureGUI:
         self.packet_tree.column("Summary", width=400)
         self.packet_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.config(command=self.packet_tree.yview)
-
-    def setup_map(self):
-        for widget in self.map_frame.winfo_children():
-            widget.destroy()
-        self.map_widget = TkinterMapView(self.map_frame, width=600, height=300, corner_radius=0)
-        self.map_widget.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        self.map_widget.set_position(20, 0)
-        self.map_widget.set_zoom(2)
 
     def setup_controls(self):
         control_frame = tk.Frame(self.root)
@@ -180,14 +189,27 @@ class PacketCaptureGUI:
         self.capture_status_label.config(text="Status: CAPTURING", foreground="green")
 
     def stop_capture(self):
+        """Stop packet capture and clean up resources properly."""
         if not self.capture_running:
             return
+            
+        # Set events to signal threads to stop
         self.stop_capture_event.set()
         self.stop_update_event.set()
-        if self.capture_thread and self.capture_thread.is_alive():
-            self.capture_thread.join(timeout=5)
-        if self.update_thread and self.update_thread.is_alive():
-            self.update_thread.join(timeout=5)
+        
+        # Clear any pending markers and batch operations
+        self.root.after(0, self.map_display_frame.clear_all_markers)
+        
+        # Wait for threads to terminate
+        try:
+            if self.capture_thread and self.capture_thread.is_alive():
+                self.capture_thread.join(timeout=2)
+            if self.update_thread and self.update_thread.is_alive():
+                self.update_thread.join(timeout=2)
+        except Exception as e:
+            print(f"Error while stopping threads: {e}")
+        
+        # Update UI state
         self.capture_running = False
         self.start_button.config(state=tk.NORMAL)
         self.stop_button.config(state=tk.DISABLED)
@@ -203,27 +225,58 @@ class PacketCaptureGUI:
         self.capture_status_label.config(text="Status: Ready to capture", foreground="blue")
 
     def update_packet_list(self):
+        """Monitor packets_data_list and update the UI accordingly."""
         last_count = 0
-        while not self.stop_update_event.is_set():
-            with packets_lock:
-                current_count = len(packets_data_list)
-                if current_count > last_count:
-                    for i in range(last_count, current_count):
-                        packet_info = packets_data_list[i]
+        try:
+            while not self.stop_update_event.is_set():
+                new_packets_to_process = []
+                with packets_lock:
+                    current_count = len(packets_data_list)
+                    if current_count > last_count:
+                        for i in range(last_count, current_count):
+                            new_packets_to_process.append((i, packets_data_list[i]))
+                        last_count = current_count
+                
+                if new_packets_to_process:
+                    for i, packet_info in new_packets_to_process:
                         timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
                         try:
-                            summary = ' '.join([packet_info['data'][j:j+2].hex() for j in range(0, min(16, packet_info['length']), 2)])
+                            summary_data = packet_info.get('data', b'')
+                            summary = ' '.join([summary_data[j:j+2].hex() for j in range(0, min(16, packet_info.get('length', 0)), 2)])
                             summary = f"Data: {summary}..."
-                        except Exception:
+                        except Exception as e:
                             summary = "Unable to parse packet"
-                        self.root.after(0, self._safe_insert_packet, i+1, packet_info['length'], timestamp, summary)
-                    last_count = current_count
-                    self.root.after(0, self.status_var.set, f"Capturing... Packets: {current_count}")
-            time.sleep(0.1)
+                        
+                        self.root.after(0, self._safe_insert_packet, i+1, packet_info.get('length',0), timestamp, summary)
+
+                        # Check for IP and add map marker for visualization
+                        if packet_info.get('src_ip'):
+                            ip = packet_info['src_ip']
+                            print(f"[IP] Processing IP for map: {ip}")
+                            coords = self.geocode_ip(ip)
+                            print(f"[IP] Coordinates for {ip}: {coords}")
+                            if coords:
+                                print(f"[IP] Adding map marker for {ip} at {coords}")
+                                # Make sure to use the correct method to schedule marker creation
+                                self.root.after(0, lambda c=coords: self.map_display_frame.add_temporary_marker(c[0], c[1], text="", duration_ms=3000))
+                                print(f"[IP] Marker scheduled for {ip}")
+                    
+                    self.root.after(0, self.status_var.set, f"Capturing... Packets: {last_count}")
+
+                # Limit frequency of updates to prevent recursion depth issues
+                time.sleep(0.2)  # Increased from 0.1 to reduce update frequency
+        except Exception as e:
+            print(f"Error in update_packet_list: {e}")
+        finally:
+            print("Update thread terminating")
 
     def _safe_insert_packet(self, num, length, timestamp, summary):
-        self.packet_tree.insert("", "end", values=(num, length, timestamp, summary))
-        self.packet_tree.see(self.packet_tree.get_children()[-1])
+        try:
+            item_id = self.packet_tree.insert("", "end", values=(num, length, timestamp, summary))
+            if item_id:
+                 self.packet_tree.see(item_id)
+        except Exception as e:
+            pass
 
     def on_packet_select(self, event):
         pass
@@ -266,11 +319,27 @@ class PacketCaptureGUI:
 
 
     def on_closing(self):
-        if self.capture_running:
-            if messagebox.askyesno("Exit", "Packet capture is still running. Do you want to stop it and exit?"):
-                self.stop_capture()
+        """Handle application shutdown."""
+        try:
+            if self.capture_running:
+                if messagebox.askyesno("Exit", "Packet capture is still running. Do you want to stop it and exit?"):
+                    # Call stop_capture and wait briefly for it to complete
+                    self.stop_capture()
+                    self.root.after(500)  # Give a moment for cleanup
+                    self.root.destroy()
+            else:
+                # Clear any remaining markers
+                if hasattr(self, 'map_display_frame'):
+                    self.map_display_frame.clear_all_markers()
+                
+                # Close geolocation service
+                if hasattr(self, 'geolocator') and self.geolocator:
+                    self.geolocator.close()
+                    
                 self.root.destroy()
-        else:
+        except Exception as e:
+            print(f"Error during shutdown: {e}")
+            # Force destroy even if there was an error
             self.root.destroy()
 
 

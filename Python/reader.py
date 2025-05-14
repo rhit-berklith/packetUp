@@ -1,13 +1,14 @@
 import threading
 import time
-from scapy.all import sniff, get_if_list
+from scapy.all import sniff, get_if_list, IP
 from geo_blocker import is_blocked
+
 # Depending on your Scapy installation and OS, you might need to configure Npcap/WinPcap.
 # from scapy.config import conf
 # Example: conf.use_pcap = True or conf.use_npcap = True if issues arise.
 
 # Global list to store captured packets' data
-# Each element will be a dictionary: {'length': int, 'data': bytes}
+# Each element will be a dictionary: {'length': int, 'data': bytes, 'src_ip': str}
 packets_data_list = []
 
 # Lock for thread-safe access to packets_data_list
@@ -17,18 +18,23 @@ packets_lock = threading.Lock()
 def packet_callback(packet):
     """
     This function is called by Scapy for each captured packet.
-    It extracts length and raw data, then appends to the global list.
+    It extracts length, raw data, and source IP (if available),
+    then appends to the global list.
     """
     
 
     with packets_lock:
         packet_info = {
             'length': len(packet),      # Length of the packet
-            'data': bytes(packet)       # Raw bytes of the packet
+            'data': bytes(packet),      # Raw bytes of the packet
+            'src_ip': None              # Placeholder for source IP
         }
+        if packet.haslayer(IP):
+            packet_info['src_ip'] = packet[IP].src
+
         packets_data_list.append(packet_info)
         # Always print for debug (remove or comment out for production)
-        print(f"[reader.py] Packet captured: length={packet_info['length']} (total={len(packets_data_list)})")
+        # print(f"[reader.py] Packet captured: length={packet_info['length']}, src_ip={packet_info['src_ip']} (total={len(packets_data_list)})")
         
         # When running in console mode, print packet information
         if __name__ == "__main__":
@@ -39,6 +45,7 @@ def packet_callback(packet):
             if packet_num % 10 == 0:
                 print(f"\nPacket #{packet_num}: {packet.summary()}")
                 print(f"  Length: {packet_info['length']} bytes")
+                print(f"  Source IP: {packet_info['src_ip']}")
                 # Show first 16 bytes of data as hex
                 hex_data = packet_info['data'][:16].hex(' ')
                 print(f"  Data (first 16 bytes): {hex_data}")
@@ -155,6 +162,7 @@ def main_python_equivalent():
                 pkt_info = packets_data_list[i]
                 print(f"\nPacket #{i+1}:")
                 print(f"  Length: {pkt_info['length']} bytes")
+                print(f"  Source IP: {pkt_info['src_ip']}")
                 # Show first 32 bytes of data as hex with spacing for readability
                 hex_data = ' '.join([pkt_info['data'][j:j+2].hex() for j in range(0, min(32, len(pkt_info['data'])), 2)])
                 print(f"  Data: {hex_data}")
@@ -169,6 +177,7 @@ def main_python_equivalent():
                     for i, pkt_info in enumerate(packets_data_list):
                         print(f"\nPacket #{i+1}:")
                         print(f"  Length: {pkt_info['length']} bytes")
+                        print(f"  Source IP: {pkt_info['src_ip']}")
                         # Show more bytes in detailed view
                         hex_data = ' '.join([pkt_info['data'][j:j+16].hex() for j in range(0, min(64, len(pkt_info['data'])), 16)])
                         print(f"  Data: {hex_data}")
