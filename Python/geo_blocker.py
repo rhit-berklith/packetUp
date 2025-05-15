@@ -52,18 +52,27 @@ def remove_country(country_code):
     remove_firewall_rule(code)
 
 def create_firewall_rule(country_code, ip_list):
-    addresses = ",".join(ip_list[:500])  # Windows max limit per rule
+    addresses = ",".join(ip_list[:500])
     rule_name = f"{FIREWALL_PREFIX}_{country_code}"
-    ps_command = f"""
-    New-NetFirewallRule -DisplayName '{rule_name}' `
-                        -Direction Inbound `
-                        -RemoteAddress {addresses} `
-                        -Action Block `
-                        -Protocol Any
-    """
-    subprocess.run(["powershell", "-Command", ps_command], shell=True)
+    ps_command = (
+        f"New-NetFirewallRule -DisplayName '{rule_name}' "
+        f"-Direction Inbound "
+        f"-RemoteAddress {addresses} "
+        f"-Action Block "
+        f"-Protocol Any"
+    )
+    result = subprocess.run(["powershell", "-Command", ps_command], capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"[GeoBlocker] Failed to create firewall rule: {result.stderr}")
+    else:
+        print(f"[GeoBlocker] Successfully created rule '{rule_name}'")
+
 
 def remove_firewall_rule(country_code):
     rule_name = f"{FIREWALL_PREFIX}_{country_code}"
     ps_command = f"Remove-NetFirewallRule -DisplayName '{rule_name}'"
-    subprocess.run(["powershell", "-Command", ps_command], shell=True)
+    result = subprocess.run(["powershell", "-Command", ps_command], capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"[GeoBlocker] Failed to remove firewall rule '{rule_name}': {result.stderr}")
+    else:
+        print(f"[GeoBlocker] Successfully removed rule '{rule_name}'")

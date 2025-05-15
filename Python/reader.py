@@ -1,7 +1,6 @@
 import threading
 import time
 from scapy.all import sniff, get_if_list, IP
-from geo_blocker import is_blocked
 
 # Depending on your Scapy installation and OS, you might need to configure Npcap/WinPcap.
 # from scapy.config import conf
