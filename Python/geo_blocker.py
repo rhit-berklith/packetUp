@@ -38,9 +38,10 @@ def add_country(country_code):
         with urllib.request.urlopen(url) as response:
             ip_list = [line.decode().strip() for line in response.readlines()]
             _ip_cache[code] = ip_list
-            create_firewall_rule(code, ip_list)
+            create_firewall_rule_netsh(code, ip_list)  # Use netsh version!
     except Exception as e:
         print(f"[GeoBlocker] Failed to get IP list for {code}: {e}")
+
 
 def remove_country(country_code):
     code = country_code.upper()
@@ -49,30 +50,34 @@ def remove_country(country_code):
 
     print(f"[GeoBlocker] Unblocking country: {code}")
     _blocked_countries.discard(code)
-    remove_firewall_rule(code)
+    remove_firewall_rule_netsh(code)  # Use netsh version!
 
-def create_firewall_rule(country_code, ip_list):
-    addresses = ",".join(ip_list[:500])
+
+def create_firewall_rule_netsh(country_code, ip_list):
+    addresses = ",".join(ip_list[:500])  # Windows has a 1000 address limit per rule; use batching if needed
     rule_name = f"{FIREWALL_PREFIX}_{country_code}"
-    ps_command = (
-        f"New-NetFirewallRule -DisplayName '{rule_name}' "
-        f"-Direction Inbound "
-        f"-RemoteAddress {addresses} "
-        f"-Action Block "
-        f"-Protocol Any"
-    )
-    result = subprocess.run(["powershell", "-Command", ps_command], capture_output=True, text=True)
+    netsh_command = [
+        "netsh", "advfirewall", "firewall", "add", "rule",
+        f"name={rule_name}",
+        "dir=in",
+        "action=block",
+        f"remoteip={addresses}",
+        "enable=yes"
+    ]
+    result = subprocess.run(netsh_command, capture_output=True, text=True)
     if result.returncode != 0:
-        print(f"[GeoBlocker] Failed to create firewall rule: {result.stderr}")
+        print(f"[GeoBlocker] Failed to create netsh firewall rule: {result.stderr}")
     else:
-        print(f"[GeoBlocker] Successfully created rule '{rule_name}'")
+        print(f"[GeoBlocker] Successfully created netsh rule '{rule_name}'")
 
-
-def remove_firewall_rule(country_code):
+def remove_firewall_rule_netsh(country_code):
     rule_name = f"{FIREWALL_PREFIX}_{country_code}"
-    ps_command = f"Remove-NetFirewallRule -DisplayName '{rule_name}'"
-    result = subprocess.run(["powershell", "-Command", ps_command], capture_output=True, text=True)
+    netsh_command = [
+        "netsh", "advfirewall", "firewall", "delete", "rule",
+        f"name={rule_name}"
+    ]
+    result = subprocess.run(netsh_command, capture_output=True, text=True)
     if result.returncode != 0:
-        print(f"[GeoBlocker] Failed to remove firewall rule '{rule_name}': {result.stderr}")
+        print(f"[GeoBlocker] Failed to delete netsh firewall rule '{rule_name}': {result.stderr}")
     else:
-        print(f"[GeoBlocker] Successfully removed rule '{rule_name}'")
+        print(f"[GeoBlocker] Successfully deleted netsh rule '{rule_name}'")

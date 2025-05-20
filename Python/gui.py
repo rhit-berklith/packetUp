@@ -252,14 +252,14 @@ class PacketCaptureGUI:
                         # Check for IP and add map marker for visualization
                         if packet_info.get('src_ip'):
                             ip = packet_info['src_ip']
-                            print(f"[IP] Processing IP for map: {ip}")
+                            ##print(f"[IP] Processing IP for map: {ip}")
                             coords = self.geocode_ip(ip)
-                            print(f"[IP] Coordinates for {ip}: {coords}")
+                            ##print(f"[IP] Coordinates for {ip}: {coords}")
                             if coords:
-                                print(f"[IP] Adding map marker for {ip} at {coords}")
+                                ##print(f"[IP] Adding map marker for {ip} at {coords}")
                                 # Make sure to use the correct method to schedule marker creation
                                 self.root.after(0, lambda c=coords: self.map_display_frame.add_temporary_marker(c[0], c[1], text="", duration_ms=3000))
-                                print(f"[IP] Marker scheduled for {ip}")
+                                ##print(f"[IP] Marker scheduled for {ip}")
                     
                     self.root.after(0, self.status_var.set, f"Capturing... Packets: {last_count}")
 
