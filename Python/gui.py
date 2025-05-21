@@ -258,7 +258,10 @@ class PacketCaptureGUI:
                             if coords:
                                 ##print(f"[IP] Adding map marker for {ip} at {coords}")
                                 # Make sure to use the correct method to schedule marker creation
-                                self.root.after(0, lambda c=coords: self.map_display_frame.add_temporary_marker(c[0], c[1], text="", duration_ms=3000))
+                                self.root.after(0,
+                                    self.map_display_frame.add_temporary_marker,
+                                    coords[0], coords[1], "", 3000
+                                )
                                 ##print(f"[IP] Marker scheduled for {ip}")
                     
                     self.root.after(0, self.status_var.set, f"Capturing... Packets: {last_count}")

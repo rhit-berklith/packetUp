@@ -8,6 +8,7 @@ class MapFrame(ttk.LabelFrame):
         self.map_widget = None
         self.setup_map_widget()
         self.markers = []  # Keep track of markers to clean up on exit
+        self.active_temp_markers = {}
 
     def setup_map_widget(self):
         # Clear any existing widgets in this frame, though typically it's new
@@ -29,6 +30,10 @@ class MapFrame(ttk.LabelFrame):
         if not self.map_widget:
             return None
             
+        # only one temp‐marker per location
+        if (lat, lon) in self.active_temp_markers:
+            return
+        
         try:
             # Create a simple marker with minimal parameters
             marker = self.map_widget.set_marker(
@@ -41,19 +46,19 @@ class MapFrame(ttk.LabelFrame):
             if marker:
                 # Store marker in our list
                 self.markers.append(marker)
-                # Schedule deletion
-                self.after(duration_ms, lambda m=marker: self.delete_marker_object(m))
+                self.active_temp_markers[(lat, lon)] = marker
+                # schedule a single removal
+                self.map_widget.after(duration_ms, lambda lat=lat, lon=lon: self._remove_temp_marker(lat, lon))
             return marker
         except Exception as e:
             print(f"[MAP] Error creating marker at ({lat}, {lon}): {e}")
             return None
 
-    def delete_marker_object(self, marker):
-        """Delete a marker object from the map."""
-        if marker in self.markers:
+    def _remove_temp_marker(self, latitude, longitude):
+        marker = self.active_temp_markers.pop((latitude, longitude), None)
+        if marker:
             try:
                 marker.delete()
-                self.markers.remove(marker)
             except Exception as e:
                 print(f"[MAP] Error deleting marker: {e}")
                 # Still remove from our tracking list even if deletion failed
@@ -69,6 +74,7 @@ class MapFrame(ttk.LabelFrame):
             except:
                 pass  # Ignore errors during cleanup
         self.markers.clear()
+        self.active_temp_markers.clear()
 
 if __name__ == '__main__':
     root = tk.Tk()
