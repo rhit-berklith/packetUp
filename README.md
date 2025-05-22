@@ -112,10 +112,3 @@ Download the MaxMind databases and place them in the project folder:
 This project is for educational and research use only.
 IP geolocation and blocklist data copyright by their respective owners.
 
----
-
-**PacketUp!** – “See your packets. Block the world.”
-
----
-
-Let me know if you want a more detailed example section, screenshots, or step-by-step GIF instructions!
