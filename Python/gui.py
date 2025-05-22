@@ -4,6 +4,8 @@ import threading
 import time
 from scapy.all import get_if_list, conf
 import datetime
+from scapy.all import IP, TCP, UDP, ICMP, ARP, Ether  # Add ARP and Ether
+
 
 from reader import capture_packets_on_interface, packets_data_list, packets_lock
 from map import MapFrame
@@ -249,9 +251,7 @@ class PacketCaptureGUI:
                         
                         timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
                         try:
-                            summary_data = packet_info.get('data', b'')
-                            summary = ' '.join([summary_data[j:j+2].hex() for j in range(0, min(16, packet_info.get('length', 0)), 2)])
-                            summary = f"Data: {summary}..."
+                            summary = self.create_friendly_summary(packet_info)
                         except Exception as e:
                             summary = "Unable to parse packet"
                         
@@ -286,6 +286,43 @@ class PacketCaptureGUI:
 
     def on_packet_select(self, event):
         pass
+
+
+    def create_friendly_summary(self, pkt_info):
+        try:
+            packet = pkt_info.get('scapy_pkt', None)
+            if not packet:
+                return pkt_info.get('summary', 'Unknown')
+
+            if packet.haslayer(IP):
+                if packet.haslayer(TCP):
+                    proto = 'TCP'
+                    src = f"{packet[IP].src}:{packet[TCP].sport}"
+                    dst = f"{packet[IP].dst}:{packet[TCP].dport}"
+                elif packet.haslayer(UDP):
+                    proto = 'UDP'
+                    src = f"{packet[IP].src}:{packet[UDP].sport}"
+                    dst = f"{packet[IP].dst}:{packet[UDP].dport}"
+                elif packet.haslayer(ICMP):
+                    proto = 'ICMP'
+                    src = packet[IP].src
+                    dst = packet[IP].dst
+                else:
+                    proto = 'IP'
+                    src = packet[IP].src
+                    dst = packet[IP].dst
+                return f"{proto} {src} -> {dst}"
+
+            elif packet.haslayer(ARP):
+                return "ARP Packet"
+
+            elif packet.haslayer(Ether):
+                return "Ethernet Frame (Non-IP)"
+
+            else:
+                return "Unknown Protocol"
+        except Exception as e:
+            return f"Malformed Packet: {e}"
 
 
     def setup_geo_blocking_ui(self):

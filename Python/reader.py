@@ -26,7 +26,8 @@ def packet_callback(packet):
         packet_info = {
             'length': len(packet),      # Length of the packet
             'data': bytes(packet),      # Raw bytes of the packet
-            'src_ip': None              # Placeholder for source IP
+            'src_ip': None,   
+            'scapy_pkt': packet           # Placeholder for source IP
         }
         if packet.haslayer(IP):
             packet_info['src_ip'] = packet[IP].src
