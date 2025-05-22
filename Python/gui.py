@@ -8,7 +8,8 @@ import datetime
 from reader import capture_packets_on_interface, packets_data_list, packets_lock
 from map import MapFrame
 from geolocation import IPGeolocation  # or from geolocation_api import IPGeolocationAPI
-from geo_blocker import add_country, remove_country, get_blocked_countries
+# Ensure the correct function is imported for global cleanup
+from geo_blocker import add_country, remove_country, get_blocked_countries, remove_all_firewall_rules
 
 class PacketCaptureGUI:
     def __init__(self, root):
@@ -239,6 +240,13 @@ class PacketCaptureGUI:
                 
                 if new_packets_to_process:
                     for i, packet_info in new_packets_to_process:
+                        # --- drop packets from blocked countries ---
+                        src = packet_info.get('src_ip')
+                        if src and self.geolocator:
+                            code = self.geolocator.get_country(src)
+                            if code in get_blocked_countries():
+                                continue
+                        
                         timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
                         try:
                             summary_data = packet_info.get('data', b'')
@@ -252,22 +260,17 @@ class PacketCaptureGUI:
                         # Check for IP and add map marker for visualization
                         if packet_info.get('src_ip'):
                             ip = packet_info['src_ip']
-                            ##print(f"[IP] Processing IP for map: {ip}")
                             coords = self.geocode_ip(ip)
-                            ##print(f"[IP] Coordinates for {ip}: {coords}")
                             if coords:
-                                ##print(f"[IP] Adding map marker for {ip} at {coords}")
-                                # Make sure to use the correct method to schedule marker creation
                                 self.root.after(0,
                                     self.map_display_frame.add_temporary_marker,
                                     coords[0], coords[1], "", 3000
                                 )
-                                ##print(f"[IP] Marker scheduled for {ip}")
-                    
-                    self.root.after(0, self.status_var.set, f"Capturing... Packets: {last_count}")
+                
+                self.root.after(0, self.status_var.set, f"Capturing... Packets: {last_count}")
 
                 # Limit frequency of updates to prevent recursion depth issues
-                time.sleep(0.2)  # Increased from 0.1 to reduce update frequency
+                time.sleep(0.2)
         except Exception as e:
             print(f"Error in update_packet_list: {e}")
         finally:
@@ -296,7 +299,13 @@ class PacketCaptureGUI:
         add_button.pack(side=tk.LEFT, padx=5)
 
         remove_button = ttk.Button(frame, text="Unblock Selected", command=self.remove_country_ui)
-        remove_button.pack(side=    tk.LEFT, padx=5)
+        remove_button.pack(side=tk.LEFT, padx=5)
+        
+        # Add a button to remove all GeoBlock rules from the firewall
+        clear_all_button = ttk.Button(frame, text="Clear All Firewall Rules", 
+                                     command=self.clear_all_firewall_rules,
+                                     style="Accent.TButton")
+        clear_all_button.pack(side=tk.LEFT, padx=5)
 
         self.blocked_listbox = tk.Listbox(frame, height=4)
         self.blocked_listbox.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
@@ -305,45 +314,75 @@ class PacketCaptureGUI:
     def add_country_ui(self):
         code = self.geo_entry.get().strip().upper()
         if code:
-            add_country(code)
-            self.refresh_blocked_list()
+            success = add_country(code)
+            if not success:
+                messagebox.showerror("GeoBlocker", f"Administrator rights required to block {code}.")
+            else:
+                self.refresh_blocked_list()
 
     def remove_country_ui(self):
         selected = self.blocked_listbox.curselection()
         if selected:
             code = self.blocked_listbox.get(selected[0])
-            remove_country(code)
-            self.refresh_blocked_list()
+            success = remove_country(code)
+            if not success:
+                messagebox.showerror("GeoBlocker", f"Administrator rights required to unblock {code}.")
+            else:
+                self.refresh_blocked_list()
 
     def refresh_blocked_list(self):
         self.blocked_listbox.delete(0, tk.END)
         for code in get_blocked_countries():
             self.blocked_listbox.insert(tk.END, code)
 
+    def clear_all_firewall_rules(self):
+        """Remove all GeoBlock firewall rules, including those from previous sessions."""
+        if messagebox.askyesno("Clear All Rules", 
+                              "This will attempt to remove ALL GeoBlock firewall rules from Windows Firewall.\n"
+                              "This includes rules created in previous sessions.\n\n"
+                              "Continue?"):
+            # Call the global cleanup function
+            success = remove_all_firewall_rules() # This is geo_blocker.remove_all_firewall_rules
+            if not success: # remove_all_firewall_rules now generally returns True, but check console for details
+                messagebox.showwarning("GeoBlocker", "Rule removal process completed. Administrator rights are required. Please check the console output for details on success or failure of specific rule deletions.")
+            else:
+                messagebox.showinfo("GeoBlocker", "Attempted to remove all GeoBlock firewall rules. Please check the console output for details and verify in Windows Firewall.")
+            self.refresh_blocked_list()
 
     def on_closing(self):
         """Handle application shutdown."""
         try:
             if self.capture_running:
                 if messagebox.askyesno("Exit", "Packet capture is still running. Do you want to stop it and exit?"):
-                    # Call stop_capture and wait briefly for it to complete
                     self.stop_capture()
-                    self.root.after(500)  # Give a moment for cleanup
-                    self.root.destroy()
-            else:
-                # Clear any remaining markers
-                if hasattr(self, 'map_display_frame'):
-                    self.map_display_frame.clear_all_markers()
+                else:
+                    return # User chose not to exit
+
+            # Clear any remaining map markers
+            if hasattr(self, 'map_display_frame'):
+                self.map_display_frame.clear_all_markers()
+            
+            # Close geolocation service
+            if hasattr(self, 'geolocator') and self.geolocator:
+                self.geolocator.close()
                 
-                # Close geolocation service
-                if hasattr(self, 'geolocator') and self.geolocator:
-                    self.geolocator.close()
-                    
-                self.root.destroy()
+            # Attempt to remove all GeoBlock firewall rules from any session
+            print("[GUI] Application closing. Attempting to clear all GeoBlock firewall rules...")
+            if remove_all_firewall_rules(): # Call the global cleanup
+                print("[GUI] GeoBlock rule cleanup process completed. Check console for details.")
+            else:
+                # This path might not be hit if remove_all_firewall_rules always returns True
+                print("[GUI] GeoBlock rule cleanup process reported an issue or admin rights were missing. Check console.")
+            
+            self.root.destroy()
+
         except Exception as e:
             print(f"Error during shutdown: {e}")
-            # Force destroy even if there was an error
-            self.root.destroy()
+            # Fallback: try to destroy root even if other cleanup fails
+            try:
+                self.root.destroy()
+            except:
+                pass
 
 
 
