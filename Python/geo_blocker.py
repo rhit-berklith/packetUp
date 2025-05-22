@@ -17,10 +17,7 @@ _blocked_countries = set()
 _ip_cache = {}
 
 FIREWALL_PREFIX = "GeoBlock"
-# Increased chunk size for fewer rules
-# Try reducing this significantly. The error "A specified IP address or address keyword is not valid"
-# often occurs if the remoteip list is too long for netsh.
-DEFAULT_CHUNK_SIZE = 250 # Was 800. Try 250, or 500 if 250 is too slow.
+DEFAULT_CHUNK_SIZE = 250
 MAX_WORKERS = 4
 
 def get_country(ip):
@@ -127,7 +124,7 @@ def create_single_firewall_rule(rule_name, ip_chunk):
         "dir=in",
         "action=block",
         f"remoteip={addresses}",
-        "protocol=icmpv4",
+        "protocol=any",
         "enable=yes"
     ]
     
@@ -139,7 +136,7 @@ def create_single_firewall_rule(rule_name, ip_chunk):
         "dir=out",
         "action=block",
         f"remoteip={addresses}",
-        "protocol=icmpv4",
+        "protocol=any",
         "enable=yes"
     ]
     

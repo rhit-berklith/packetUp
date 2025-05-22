@@ -32,10 +32,8 @@ def packet_callback(packet):
             packet_info['src_ip'] = packet[IP].src
 
         packets_data_list.append(packet_info)
-        # Always print for debug (remove or comment out for production)
         # print(f"[reader.py] Packet captured: length={packet_info['length']}, src_ip={packet_info['src_ip']} (total={len(packets_data_list)})")
         
-        # When running in console mode, print packet information
         if __name__ == "__main__":
             packet_num = len(packets_data_list)
             print(f"\rPacket #{packet_num}: Length={packet_info['length']} bytes", end="")

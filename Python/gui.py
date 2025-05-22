@@ -14,7 +14,7 @@ from geo_blocker import add_country, remove_country, get_blocked_countries, remo
 class PacketCaptureGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Packet Capture Tool v1.0")
+        self.root.title("PacketUp!")
         self.root.geometry("900x600")
         self.root.minsize(800, 500)
 
