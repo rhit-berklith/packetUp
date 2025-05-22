@@ -2,12 +2,6 @@ import threading
 import time
 from scapy.all import sniff, get_if_list, IP
 
-# Depending on your Scapy installation and OS, you might need to configure Npcap/WinPcap.
-# from scapy.config import conf
-# Example: conf.use_pcap = True or conf.use_npcap = True if issues arise.
-
-# Global list to store captured packets' data
-# Each element will be a dictionary: {'length': int, 'data': bytes, 'src_ip': str}
 packets_data_list = []
 
 # Lock for thread-safe access to packets_data_list

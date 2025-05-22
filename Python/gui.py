@@ -4,7 +4,7 @@ import threading
 import time
 from scapy.all import get_if_list, conf
 import datetime
-from scapy.all import IP, TCP, UDP, ICMP, ARP, Ether  # Add ARP and Ether
+from scapy.all import IP, TCP, UDP, ICMP, ARP, Ether
 
 
 from reader import capture_packets_on_interface, packets_data_list, packets_lock

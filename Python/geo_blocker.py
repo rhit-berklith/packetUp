@@ -7,7 +7,7 @@ import requests
 import ctypes
 import concurrent.futures
 from time import sleep
-import ipaddress # Add this import if not already present
+import ipaddress
 
 _geoip_lock = Lock()
 mmdb_path = os.path.join(os.path.dirname(__file__), "GeoLite2-Country.mmdb")
