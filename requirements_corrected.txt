@@ -1,0 +1,37 @@
+# Network packet capture and analysis
+scapy==2.6.1
+
+# GeoIP database handling  
+geoip2>=4.6.0
+
+# GUI components
+tkintermapview==1.29
+customtkinter==5.2.2
+pillow==11.2.1
+
+# Network requests
+requests==2.32.3
+urllib3==2.4.0
+certifi==2025.4.26
+
+# Windows-specific (when running on Windows)
+pywin32==310; sys_platform == "win32"
+
+# Utility packages
+click==8.2.0
+pyperclip==1.9.0
+packaging==25.0
+colorama==0.4.6
+darkdetect==0.8.0
+decorator==5.2.1
+charset-normalizer==3.4.2
+idna==3.10
+six==1.17.0
+future==1.0.0
+ratelim==0.1.6
+
+# Development/testing (commented out since no tests exist yet)
+# pytest>=7.0.0
+# pytest-cov>=4.0.0
+# flake8>=6.0.0
+# black>=23.0.0
